@@ -79,3 +79,14 @@ source venv/bin/activate
 
 # Instalar dependencias
 pip install -r requirements.txt
+```
+
+## Registro de Cambios Recientes
+
+**Noviembre 2025**
+
+- Se implementó rotación automática de claves API Gemini: el sistema alterna entre varias claves configuradas en `.env` para evitar límites de uso y mejorar la robustez.
+- Mejoras en el manejo de errores: ahora el sistema detecta y reporta fallos en la extracción de texto, respuestas inválidas de la API y problemas de configuración.
+- Configuración avanzada por YAML: los prompts y el formato de respuesta se gestionan desde `config/prompt_config.yaml`, facilitando la personalización sin modificar el código fuente.
+- Persistencia y recuperación de progreso: el sistema carga automáticamente los resultados previos del archivo Excel y continúa el procesamiento sin duplicar datos.
+- Control interactivo por subcarpeta: el usuario puede pausar y continuar el procesamiento entre lotes de archivos PDF.

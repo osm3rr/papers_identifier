@@ -9,8 +9,8 @@ def setup_environment():
     """Configura el entorno y verifica dependencias"""
     load_dotenv()
     
-    if not os.getenv('GEMINI_API_KEY'):
-        print("Error: GEMINI_API_KEY no encontrada en .env")
+    if not os.getenv('GEMINI_API_KEY_1'):
+        print("Error: GEMINI_API_KEY_1 no encontrada en .env (se requiere al menos una clave).")
         sys.exit(1)
     
     # Crear carpetas necesarias
@@ -105,6 +105,10 @@ def main():
         print(f"Procesando subcarpeta: {subfolder}")
         print(f"{'='*50}")
         
+        # Resetea el contador de llamadas y la clave de API al inicio
+        # de una nueva carpeta, según tu requerimiento.
+        gemini_client.reset_key_rotation()
+
         start_item = process_subfolder(subfolder_path, pdf_processor, 
                                      gemini_client, excel_writer, start_item)
         

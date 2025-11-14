@@ -6,6 +6,7 @@ Este cliente está optimizado para:
 1. Usar instrucciones de sistema (system_instruction).
 2. Forzar la salida en modo JSON (response_mime_type).
 3. Manejar la configuración de seguridad.
+4. Rotar automáticamente las API keys cada 3 llamadas.
 """
 
 import google.generativeai as genai
@@ -19,17 +20,27 @@ class GeminiClient:
     
     Utiliza un prompt de sistema y solicita respuestas en formato JSON
     para una extracción de información fiable.
+    
+    Este cliente rota automáticamente las API keys (GEMINI_API_KEY_1,
+    GEMINI_API_KEY_2, ...) cada 3 llamadas exitosas.
     """
     
     def __init__(self):
         """Inicializa el cliente, carga la configuración y el modelo."""
-        self.api_key = os.getenv('GEMINI_API_KEY')
-        if not self.api_key:
-            # Es una mejor práctica fallar rápido si la API key no está.
-            raise ValueError("La variable de entorno GEMINI_API_KEY no está configurada.")
+        
+        # --- Lógica de Múltiples Claves ---
+        self.api_keys = self._load_api_keys()
+        if not self.api_keys:
+            raise ValueError("No se encontraron variables de entorno con el patrón 'GEMINI_API_KEY_n' (ej. GEMINI_API_KEY_1).")
+        
+        self.max_calls_per_key = 3
+        self.call_counter = 0
+        self.current_key_index = 0
+        print(f"GeminiClient inicializado con {len(self.api_keys)} API keys.")
+        # --- Fin Lógica de Múltiples Claves ---
             
-        # Configura la biblioteca una vez.
-        genai.configure(api_key=self.api_key)
+        # Configura la biblioteca (esto se hará de nuevo en _initialize_model)
+        # genai.configure(api_key=self.api_key) # Eliminado de aquí
         
         self.prompt_config = self._load_prompt_config()
         self.model = self._initialize_model()
@@ -38,6 +49,22 @@ class GeminiClient:
         if not self.model:
             raise RuntimeError("Falló la inicialización del modelo Gemini. Revisa los logs de error anteriores (causados por YAML o la API).")
         # --- FIN DE LA MEJORA ---
+
+    def _load_api_keys(self) -> list[str]:
+        """
+        Carga todas las API keys de las variables de entorno que sigan
+        el patrón GEMINI_API_KEY_1, GEMINI_API_KEY_2, ...
+        """
+        keys = []
+        i = 1
+        while True:
+            key = os.getenv(f'GEMINI_API_KEY_{i}')
+            if key:
+                keys.append(key)
+                i += 1
+            else:
+                break # Termina cuando no encuentra la siguiente clave
+        return keys
 
     def _load_prompt_config(self):
         """
@@ -62,34 +89,30 @@ class GeminiClient:
         Inicializa el GenerativeModel con configuración avanzada.
         
         Configura el modelo para:
-        1. Usar el 'system_prompt' de la configuración.
-        2. Devolver respuestas estrictamente en "application/json".
-        3. Usar configuraciones de seguridad permisivas para la tarea.
+        1. Usar la API key actualmente activa.
+        2. Usar el 'system_prompt' de la configuración.
+        3. Devolver respuestas estrictamente en "application/json".
         """
         if not self.prompt_config:
             print("Error: Configuración de prompt no cargada. No se puede inicializar el modelo.")
             return None
+        
+        if not self.api_keys:
+            print("Error: No hay API keys cargadas.")
+            return None
 
         try:
+            # --- Lógica de Rotación de Claves ---
+            # Configura genai con la clave actual CADA vez que inicializamos
+            current_key = self.api_keys[self.current_key_index]
+            genai.configure(api_key=current_key)
+            print(f"Configurando modelo con API key índice {self.current_key_index}...")
+            # --- Fin Lógica de Rotación ---
+
             # Configuración para forzar la salida JSON
             generation_config = genai.types.GenerationConfig(
                 response_mime_type="application/json"
             )
-            
-            # Para tareas de extracción, a veces es útil ser más permisivo
-            # con las configuraciones de seguridad, aunque esto depende del caso de uso.
-            
-            # --- INICIO DE LA MODIFICACIÓN ---
-            # El error 'dangerous_content' indica un problema al intentar
-            # desactivar los filtros de seguridad.
-            # Vamos a eliminar esta sección y usar los filtros seguros por defecto.
-            # safety_settings = {
-            #     'HATE_SPEECH': 'BLOCK_NONE',
-            #     'HARASSMENT': 'BLOCK_NONE',
-            #     'SEXUALLY_EXPLICIT': 'BLOCK_NONE',
-            #     'DANGEROUS_CONTENT': 'BLOCK_NONE',
-            # }
-            # --- FIN DE LA MODIFICACIÓN ---
             
             system_instruction = self.prompt_config.get('system_prompt', '')
 
@@ -102,19 +125,43 @@ class GeminiClient:
             )
             return model
         except Exception as e:
-            print(f"Error fatal inicializando el modelo Gemini: {e}")
+            print(f"Error fatal inicializando el modelo Gemini (key {self.current_key_index}): {e}")
             return None
+
+    def reset_key_rotation(self):
+        """
+        Resetea el contador y la API key al primer índice.
+        Debe llamarse al iniciar el análisis de una nueva subcarpeta.
+        """
+        print("--- Reseteando rotación de API key al inicio (nueva carpeta) ---")
+        self.current_key_index = 0
+        self.call_counter = 0
+        # Re-inicializa el modelo con la primera clave
+        self.model = self._initialize_model()
 
     def extract_paper_info(self, text: str) -> dict:
         """
         Extrae información del paper usando Gemini con modo JSON.
-        
-        Args:
-            text (str): Texto de la primera página del paper.
-            
-        Returns:
-            dict: Información extraída del paper.
+        Rota la API key si es necesario ANTES de la llamada.
         """
+        
+        # --- Lógica de Rotación ---
+        if self.call_counter >= self.max_calls_per_key:
+            print(f"Límite de {self.max_calls_per_key} llamadas alcanzado. Rotando API key...")
+            # Pasa al siguiente índice, y usa % (módulo) para volver al inicio (ej. 0, 1, 2 -> 0)
+            self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
+            self.call_counter = 0
+            
+            # Re-inicializa el modelo con la nueva clave
+            self.model = self._initialize_model()
+            
+            if not self.model:
+                 print("Error: Falló la re-inicialización del modelo durante la rotación de clave.")
+                 return self._create_empty_response()
+            
+            print(f"Rotación completa. Nueva API key índice: {self.current_key_index}")
+        # --- Fin Lógica de Rotación ---
+
         if not self.model:
             print("Error: El modelo no está inicializado. Abortando extracción.")
             return self._create_empty_response()
@@ -135,6 +182,12 @@ class GeminiClient:
             if response.prompt_feedback.block_reason:
                 print(f"Prompt bloqueado por: {response.prompt_feedback.block_reason}")
                 return self._create_empty_response()
+            
+            # --- Incrementar contador ---
+            # Solo incrementamos el contador si la llamada fue exitosa
+            self.call_counter += 1
+            print(f"Llamada {self.call_counter}/{self.max_calls_per_key} con key índice {self.current_key_index}.")
+            # --- Fin Incrementar contador ---
 
             # El modelo está configurado para devolver JSON,
             # por lo que response.text debería ser un string JSON.

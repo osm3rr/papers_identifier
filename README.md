@@ -64,7 +64,7 @@ paper_identifier/
 - Cuenta en Google AI Studio con API key para Gemini
 - Entorno virtual de Python
 
-## Instalación y Configuración
+## Instalación, Configuración y uso
 
 ### 1. Clonar y Configurar el Entorno
 
@@ -80,6 +80,16 @@ source venv/bin/activate
 
 # Instalar dependencias
 pip install -r requirements.txt
+```
+### ¿Cómo usar el script?
+- Crea una carpeta en la raiz del proyecto de nombre papers_to_identify,
+  y allí organiza tus papers de 10 en 10 (es una referencia) en subcarpetas de nombre part_1, part_2,... según sea necesario.
+- Asegurate de agregar varias claves API en tu archivo .env, para no tener problemas con los límites de uso de la cuentas gratuitas. Como referencia, este script está configurado para 4 API, y la tasa de análisis es de aproximadamente 20 páginas por cada API.
+
+#### Para correr el script, despúes de activar el entorno virtual, puedes utilizar la siguiente sentencia en la consola
+
+```bash
+python src/main.py
 ```
 
 ## Registro de Cambios Recientes

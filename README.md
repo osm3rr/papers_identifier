@@ -48,14 +48,15 @@ Este sistema proporciona una solución completa y profesional para la automatiza
 - **Manejo de APIs**: Integración con Gemini API para análisis de texto
 
 ## Estructura del Proyecto
+```bash
 paper_identifier/
 ├── config/ # Configuraciones YAML para el LLM
 ├── src/ # Código fuente Python
 ├── papers_to_identify/ # Carpeta de entrada con subcarpetas
 ├── output/ # Carpeta de salida con resultados
 ├── .env # Variables de entorno (no versionado)
-└── requirements.txt # Dependencias del proyecto
-
+└── requirements.txt # Dependencias del proyecto`
+```
 
 ## Requisitos Previos
 
